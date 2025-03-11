@@ -1,30 +1,79 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+// 🔹 Local Notification এর জন্য ইনস্ট্যান্স
+FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+// 🔹 Background Notification Handler
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("Background Message Received!");
+  print("Title: ${message.notification?.title}");
+  print("Body: ${message.notification?.body}");
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  // **নোটিফিকেশন পারমিশন চেক ও অনুরোধ করুন**
+  // 🔹 Local Notification সেটআপ
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(android: initializationSettingsAndroid);
+
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+  // 🔹 নোটিফিকেশন পারমিশন চেক ও অনুরোধ করুন
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
   }
 
-  // Firebase Messaging ইনিশিয়ালাইজ
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  // 🔹 Background Notification Handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // FCM Token সংগ্রহ করা (যাতে আমরা নির্দিষ্ট ডিভাইসে নোটিফিকেশন পাঠাতে পারি)
+  // 🔹 FCM ইনিশিয়ালাইজ করুন
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
   String? token = await messaging.getToken();
   print("FCM Token: $token");
-  // Foreground Notification Listener
+
+  // 🔹 Foreground Notification Listener
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print("Received a notification in foreground!");
     print("Title: ${message.notification?.title}");
     print("Body: ${message.notification?.body}");
+
+    _showNotification(message);
   });
+
   runApp(const MyApp());
+}
+
+// 🔹 Local Notification দেখানোর ফাংশন
+Future<void> _showNotification(RemoteMessage message) async {
+  const AndroidNotificationDetails androidPlatformChannelSpecifics =
+      AndroidNotificationDetails(
+    'high_importance_channel', // চ্যানেল আইডি
+    'High Importance Notifications', // চ্যানেলের নাম
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+
+  const NotificationDetails platformChannelSpecifics =
+      NotificationDetails(android: androidPlatformChannelSpecifics);
+
+  await flutterLocalNotificationsPlugin.show(
+    0, // নোটিফিকেশন আইডি
+    message.notification?.title ?? 'No Title',
+    message.notification?.body ?? 'No Body',
+    platformChannelSpecifics,
+  );
 }
 
 class MyApp extends StatelessWidget {
